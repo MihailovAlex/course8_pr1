@@ -1,0 +1,91 @@
+---
+title: "ML"
+author: "Alex Mihailov"
+date: "2024-09-08"
+output: html_document
+---
+
+### Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+ 
+The data for this project come from this source: 
+http://groupware.les.inf.puc-rio.br/har
+
+## Loading data
+```{r}
+set.seed(117)
+
+train <- read.csv('pml-training.csv')
+test <- read.csv('pml-testing.csv')
+```
+
+##P reparing data
+```{r}
+library(dplyr)
+library(tidyverse)    
+library(caret)
+
+# remove columns with a lot of NA values (more 70%)
+vars <- which((colSums(!is.na(train)) > 0.7*nrow(train)))
+train <- train[,vars]
+test <- test[,vars]
+
+# fix factor levels new_window
+train$new_window <- factor(train$new_window, levels=c("no","yes"))
+test$new_window <- factor(test$new_window, levels=c("no","yes"))
+
+# Delete the columns "X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp"
+train <- train[,-c(1,7)] 
+nvz <- nearZeroVar(train)
+train <- train[,-nvz]
+
+test <- test[,-c(1,7)] 
+test <- test[,-nvz]
+
+in_train <- createDataPartition(y=train$classe, p=0.7, list=F)
+train <- train[in_train,]
+valid <- train[-in_train,]
+
+control <- trainControl(method="cv", number=3, verboseIter=F)
+```
+
+## Building the model.
+The goal of project is to predict the manner in which participants did the exercise. This is the *classe* variable in the training set (Factor variable with 5 levels A, B, C, D, E).
+
+## Random Forest
+
+```{r}
+library(randomForest)
+library(corrplot)
+
+model_rf <- train(classe~., data=train, method="rf", trControl = control, tuneLength = 5)
+pred_rf <- predict(model_rf, valid)
+cmrf <- confusionMatrix(pred_rf, factor(valid$classe))
+cmrf
+
+plot(model_rf)
+```
+
+## Prediction
+```{r}
+pred_df <- predict(model_rf, valid)
+cm_rf <- confusionMatrix(pred_rf, factor(valid$classe))
+cm_rf
+```
+## Generalized Boosted Model (GBM)
+```{r}
+model_gbm <- train(classe~., data=train, method="gbm", trControl = control, tuneLength = 5, verbose = F)
+pred_gbm <- predict(model_gbm, valid)
+cm_gbm <- confusionMatrix(pred_gbm, factor(valid$classe))
+cm_gbm
+
+plot(model_gbm)
+```
+## Prediction
+```{r}
+pred <- predict(model_rf, test)
+```
+
+### Results
+it seems that the boosting model has been retrained. Therefore, it is better to use the forecast of the Random Forest model.
